@@ -1,6 +1,6 @@
 # Math Tutor Python
 
-从 `zicojiao/ai-math-tutor` 的 `apps/agent` 改编的 Python 数学辅导模块。移除了 LiveKit、语音识别/合成、房间、白板、RPC 和坐标动作，使用 Gemini 直接读取题目图片并返回文字。
+本项目使用 Gemini 直接读取题目图片并返回文字。
 
 支持图片识题、文字问答、学生步骤检查、完整解答、启发式提示，以及内存中的多轮对话。默认使用简体中文，可指定小学年级。
 
@@ -245,12 +245,6 @@ python -m pip wheel . --no-deps --wheel-dir dist
 测试使用真实 Google SDK，并通过 HTTPX 的离线 transport 替换远程 HTTP 请求，验证图片载荷、多轮历史、失败回滚、重置、输入校验和 CLI。无需 API Key，不调用计费模型。
 
 本次离线验证使用 `google-genai 2.29.0`、`Pillow 12.3.0`、`pydantic-settings 2.15.0`。配置测试覆盖来源优先级、密钥别名和隐藏显示、字段校验及 CLI 文件覆盖。未使用真实 API Key 进行联网生成测试，不能将离线测试视为模型效果验证。
-
-## 来源与许可
-
-源项目：https://github.com/zicojiao/ai-math-tutor
-
-基于用户提供的本地源码改编，保留原项目 MIT 许可证及版权声明，见 `LICENSE`。本目录不包含 API Key。
 
 ## 错题管理
 
