@@ -2,10 +2,12 @@
 
 from typing import Annotated, Literal
 
+from .education import grade_description
+
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 NonemptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-ANALYSIS_PROMPT_VERSION = "analysis-v2"
+ANALYSIS_PROMPT_VERSION = "analysis-v3"
 
 
 class AnalysisModel(BaseModel):
@@ -64,7 +66,7 @@ class ProblemAnalysis(AnalysisModel):
 
 
 def build_analysis_prompt(grade: int | None) -> str:
-    level = f"学生为小学{grade}年级。" if grade else "学生年级未知，优先使用适合小学的直观方法。"
+    level = grade_description(grade)
     return f"""你是数学教研与辅导助手。{level}
 分析用户提供的单道数学题（文字或图片），按给定 JSON schema 返回简体中文结构化结果。
 core_knowledge_points 是题目主要考查的概念/方法，不是泛泛的学科或章节名。

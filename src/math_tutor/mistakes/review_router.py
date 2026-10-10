@@ -37,9 +37,10 @@ def reviews(request: Request,student: Student,cursor: str|None=Query(None,max_le
         conditions.append('(r.next_review_at,m.id)>(?,?)')
         args.extend(values)
     with service.database.connect() as conn:
+        student_timezone=service.learning.get_preferences(conn,student).timezone
         rows=[dict(r) for r in conn.execute('SELECT m.*,r.next_review_at FROM mistakes m JOIN review_schedules r ON r.mistake_id=m.id WHERE '+' AND '.join(conditions)+' ORDER BY r.next_review_at,m.id LIMIT ?',[*args,limit+1])]
     next_cursor=None
     if len(rows)>limit:
         row=rows[limit-1]
         next_cursor=base64.urlsafe_b64encode(json.dumps([row['next_review_at'],row['id']]).encode()).decode()
-    return {'items':rows[:limit],'next_cursor':next_cursor,'timezone':student.timezone}
+    return {'items':rows[:limit],'next_cursor':next_cursor,'timezone':student_timezone}

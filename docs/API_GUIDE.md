@@ -44,7 +44,7 @@ worker 未启动时，错题仍能保存，但分析停留在 `pending`。服务
 
 ### 本地测试身份
 
-错题管理、图片资源、复习和统计接口要求学生身份。当前没有账号注册、登录或发放 Token 的接口；也没有内置 `Bearer` Token 校验。
+错题管理、图片资源、复习、统计及学习接口要求学生身份。当前没有账号注册、登录或发放 Token 的接口；也没有内置 `Bearer` Token 校验。
 
 本地调试可在 `.env` 添加：
 
@@ -61,7 +61,7 @@ TUTOR_LOCAL_STUDENT_ID=11111111-1111-4111-8111-111111111111
 
 | 项目 | 约定 |
 | --- | --- |
-| `grade` | 小学年级，1–6，均可选；不要传 0 或空字符串，未知时省略 |
+| `grade` | 统一年级 1–12，1–6 小学、7–9 初中、10–12 高中，均可选；不要传 0 或空字符串，未知时省略 |
 | 图片格式 | PNG、JPEG、WebP；建议拍清单道题及完整条件 |
 | 单张图片大小 | 不超过 10 MiB；不超过 1600 万像素；不支持多帧图片 |
 | 整个请求体 | 不超过 14 MiB，包含 JSON 或 multipart 开销 |
@@ -76,7 +76,7 @@ curl 使用 `-F` 时，不要自行设置 `Content-Type`，curl 会生成带 bou
 
 错题上传和作答表单拒绝未知或重复字段，JSON 请求拒绝未定义字段。JSON 可选 `grade` 接受 `null`；multipart 中未知年级应省略字段。
 
-独立分析和普通辅导会话不传 grade 时，沿用服务端 `TUTOR_GRADE` 配置，未配置则按未知年级处理。错题收录不传 grade 时保存 null，后台按未知年级分析。
+独立分析和普通辅导会话不传 grade 时，沿用服务端 `TUTOR_GRADE` 配置，未配置则按未知年级处理。错题收录不传 grade 时保存 null；后台分析、提示和判答优先使用题目年级，未知时使用学习偏好的当前年级，两者均未知时不推断学段。
 
 ## 4. 全部业务接口一览
 
@@ -97,6 +97,12 @@ curl 使用 `-F` 时，不要自行设置 `Content-Type`，curl 会生成带 bou
 | POST | `/v1/mistakes/{mistake_id}/practice-sessions/{practice_id}/hints` | 获取并记录提示 | 200 |
 | POST | `/v1/mistakes/{mistake_id}/attempts` | 提交学生作答并判定 | 201 / 200 / 202 |
 | GET | `/v1/reviews/today` | 获取已到期、逾期复习题 | 200 |
+| GET | `/v1/learning/abilities` | 知识点表现与证据 | 200 |
+| GET | `/v1/learning/preferences` | 读取学习偏好 | 200 |
+| PUT | `/v1/learning/preferences` | 完整替换学习偏好 | 200 |
+| POST | `/v1/learning/daily-tasks` | 幂等生成今天任务 | 201 |
+| GET | `/v1/learning/daily-tasks/today` | 获取今天任务 | 200 |
+| GET | `/v1/learning/daily-tasks/{task_id}` | 获取自己的历史任务 | 200 |
 | POST | `/v1/sessions` | 创建普通多轮辅导会话 | 201 |
 | POST | `/v1/sessions/{session_id}/messages` | JSON 发送文字或 base64 图片 | 200 |
 | POST | `/v1/sessions/{session_id}/messages/image` | 上传图片并继续辅导 | 200 |
@@ -115,7 +121,7 @@ curl 使用 `-F` 时，不要自行设置 `Content-Type`，curl 会生成带 bou
 | --- | --- | --- |
 | `image` | 是 | 题目图片文件 |
 | `text` | 否 | 补充要求，默认空字符串 |
-| `grade` | 否 | 1–6 |
+| `grade` | 否 | 1–12 |
 
 ```bash
 curl http://127.0.0.1:8000/v1/analyze/image \
@@ -137,7 +143,7 @@ curl http://127.0.0.1:8000/v1/analyze/image \
 | --- | --- | --- |
 | `text` | 与图片至少提供一个 | 题干或补充要求，默认空字符串 |
 | `image_data_url` | 与文字至少提供一个 | 完整 base64 图片 data URL，默认 null |
-| `grade` | 否 | 1–6 或 null |
+| `grade` | 否 | 1–12 或 null |
 
 ```bash
 curl http://127.0.0.1:8000/v1/analyze \
@@ -577,7 +583,7 @@ console.log('错题ID', result.id);
 4. 学生需要帮助时调用 hints；服务端记录提示次数。
 5. 生成并保存本次 Idempotency-Key，提交 attempts，按 201/200/202/错误分支处理。
 6. 展示证据和错因，需要时查 include_solution=true；重新查询详情获取复习日程。
-7. 下一次进入“今日复习”时调用 reviews/today，为选中的题目重新创建练习。
+7. 下一次进入“今日复习”时获取 daily-tasks/today；未生成时 POST daily-tasks，练习时关联 daily_task_item_id。需要完整实时到期列表时仍可调用 reviews/today。
 
 ## 12. 当前实现边界
 
@@ -602,3 +608,121 @@ TUTOR_QUALITY_MAX_REPAIRS=1
 最多发生四次应用层模型调用（首次分析、复核、一次修复、再次复核），SDK 内部网络重试不计入此上限，因此复杂题目会增加成本与延迟。模型复核不是数学正确性的证明；本地检查也无法覆盖全部公式或知识点。Loguru 记录检查状态、问题代码、核验数量和修复次数，不记录原始题目、完整解答或图片。
 
 修改配置或更新代码后，需重启 API 和错题 worker。已有错题分析不会自动重新检查，可调用 `POST /v1/mistakes/{mistake_id}/analyze` 重新分析。分析快照记录提示词及质量策略版本，便于追踪。
+
+## 每日学习与能力评估
+
+以下六个接口均要求已认证的学生身份，客户端不传 student_id。生成与查询不调用模型；只有练习提示、需要模型的作答判定及题目分析产生模型请求。原 `/v1/reviews/today` 继续返回实时到期列表，每日任务则保存当天选题及完成情况。
+
+| 方法 | 路径 | 成功状态 | 用途 |
+| --- | --- | --- | --- |
+| GET | `/v1/learning/preferences` | 200 | 读取偏好，未设置返回默认值 |
+| PUT | `/v1/learning/preferences` | 200 | 完整替换偏好；省略字段恢复默认值 |
+| POST | `/v1/learning/daily-tasks` | 201 | 生成今天任务，已有任务返回原任务 |
+| GET | `/v1/learning/daily-tasks/today` | 200 | 读取今天任务，未生成返回 404 |
+| GET | `/v1/learning/daily-tasks/{task_id}` | 200 | 按 ID 读取自己的历史任务 |
+| GET | `/v1/learning/abilities` | 200 | 知识点表现与证据摘要 |
+
+### 设置偏好并开启定时生成
+
+```bash
+curl -X PUT http://127.0.0.1:8000/v1/learning/preferences \
+  -H 'Content-Type: application/json' \
+  -d '{"grade":8,"timezone":"Asia/Shanghai","daily_enabled":true,"generation_time":"19:00","daily_limit":5}'
+```
+
+| 字段 | 默认值 | 约束 |
+| --- | --- | --- |
+| grade | null | 当前学生年级，可选 1–12，与题目年级可以不同 |
+| timezone | 首次读取采用认证上下文时区 | IANA 时区；PUT 省略则采用认证上下文时区 |
+| daily_enabled | false | 是否开启定时生成，关闭不删除历史任务 |
+| generation_time | 19:00 | 严格 HH:mm，当地时间 |
+| daily_limit | 5 | 整数 1–10；修改不重抽已生成任务 |
+
+响应返回保存后的五个字段。服务端时钟决定任务日期，不接受客户端指定日期。定时生成还需单独运行 `python -m math_tutor.learning.cli scheduler`，每 60 秒扫描一次。开启后当天已过生成时间时，下次扫描生成今天任务；重启只补当前日期，不补建过去的每日任务。重复夏令时取第一次有效时刻，缺失时刻顺延至首个有效时刻。此功能只生成任务，不发送短信或推送。
+
+### 生成与查看任务
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/learning/daily-tasks
+curl http://127.0.0.1:8000/v1/learning/daily-tasks/today
+```
+
+响应关键字段示例，UUID 需使用实际返回值：
+
+```json
+{
+  "id": "TASK_UUID",
+  "local_date": "2026-10-10",
+  "timezone": "Asia/Shanghai",
+  "source": "manual",
+  "policy_version": "daily-v1",
+  "created_at": "2026-10-10T11:00:00Z",
+  "completed_count": 0,
+  "available_count": 1,
+  "message": null,
+  "items": [{
+    "id": "ITEM_UUID",
+    "mistake_id": "MISTAKE_UUID",
+    "mistake_id_snapshot": "MISTAKE_UUID",
+    "content_version": 1,
+    "reason": "due_review",
+    "due_at": "2026-10-10T10:00:00Z",
+    "status": "pending",
+    "attempt_id": null,
+    "outcome": null,
+    "independent": null
+  }]
+}
+```
+
+`source` 为 manual 或 scheduled；`reason` 为 due_review（已到期）或 new_mistake（尚无复习计划的错题）。只选取当前版本 ready 且分析 solved 的题目，先到期复习，再补无计划错题，未来到期题不提前插入；在相同优先级内优先覆盖不同已映射细分知识点。无候选时仍创建空任务，items=[]，并返回“今日暂无待复习错题”。
+
+同一天新增错题不会重新填充任务，可沿用普通错题练习流程。时区修改不改变已生成任务的快照；GET today 使用当前偏好时区计算日期，历史任务通过 ID 查询。任务不包含答案或步骤，题目内容通过原错题详情及图片接口获取。
+
+### 关联任务项并提交真实作答
+
+创建练习时增加可选 JSON 请求体；原来不传请求体的调用继续有效：
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/mistakes/MISTAKE_UUID/practice-sessions \
+  -H 'Content-Type: application/json' \
+  -d '{"daily_task_item_id":"ITEM_UUID"}'
+
+curl http://127.0.0.1:8000/v1/mistakes/MISTAKE_UUID/attempts \
+  -H 'Idempotency-Key: daily-practice-001' \
+  -F 'text=学生实际答案或步骤' -F 'practice_id=PRACTICE_UUID'
+```
+
+practice_id 使用创建练习响应的 id。明确判答后，同一事务更新作答、复习日程和任务项；重复幂等提交不重复完成。未关联的自由练习仍更新复习日程，但不完成每日任务。
+
+| 状态 | 含义 |
+| --- | --- |
+| pending | 尚未提交有效关联作答 |
+| completed | 已完成一次明确判答的复习，可能答对或答错 |
+| needs_confirmation | 已提交但无法明确判定，后续新关联练习可以再次作答 |
+| invalidated | 题目删除、内容版本变化或重新分析等使原任务项失效 |
+
+outcome 为 correct、incorrect 或 undetermined；independent 表示该次练习是否未使用提示。完成一次复习不代表掌握。客户端没有修改完成状态的接口；错误/其他学生的任务项不能关联。已完成、已失效或题目版本不符时创建关联练习返回 409，其他学生的任务项返回 404。人工更正会更新关联任务的判定。
+
+失效项不补题，排除 completed_count 和 available_count。删题后 mistake_id 为 null，保留 ID/版本快照供历史任务解释，不保留已删除正文和图片；界面应提示“题目已删除”，不再请求原题。
+
+### 查看知识点表现
+
+```bash
+curl http://127.0.0.1:8000/v1/learning/abilities
+```
+
+返回 `policy_version=ability-v1`、`window_days=30`、`as_of`、`items` 和 `core_summary`。细分节点包含 point_id、name、parent_id、适用年级范围、evidence_count、question_count、date_count、accuracy、state、recent_errors 及 evidence 引用。evidence 关联原 attempt_id、analysis_id、mistake_id、日期、正确性及来源；核心节点只汇总子节点 state_counts。
+
+| state | 中文表现 | 首期规则 |
+| --- | --- | --- |
+| insufficient_evidence | 证据不足 | 少于 3 条证据或 2 道不同题目 |
+| needs_practice | 需加强 | 证据充分后，正确率低于 60% 或最近两条均错误 |
+| stable | 较稳定 | 至少 5 条、3 道题、2 个日期，正确率至少 80%，最近两条均正确 |
+| basic | 初步掌握 | 其余证据充分的情况 |
+
+只用最近 30 个当地自然日内当前版本、明确判定且未使用提示的独立作答，同题同日取最后一条有效记录。正确为已映射细分节点提供正向证据；错误只有实际错因明确指向该细分节点时才提供负向证据。unknown 或仅引用核心知识点的错误不扩大到所有细分节点。
+
+只有经过目录维护确认映射的节点参与跨题统计；未映射时 items 可以为空，已映射但暂无证据的节点显示证据不足、accuracy=null。维护方式见 [使用说明](USAGE.md#每日学习服务)。这些状态是近期学习表现，不是标准化测评成绩；各学段规则与教学效果仍需真实数据验证。
+
+新接口复用 401/404/409/422 约定；SQLite 暂时不可用返回 503 和 Retry-After=60，可稍后重试。

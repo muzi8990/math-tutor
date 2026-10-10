@@ -1,5 +1,6 @@
 """FastAPI endpoints for structured analysis and in-memory tutoring sessions."""
 
+import sqlite3
 import base64
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -19,7 +20,7 @@ from .settings import Settings
 from .logging import logger, configure_logging, remove_handlers, RequestLoggingMiddleware
 
 Mode = Literal["hint", "solve", "check", "read"]
-Grade = Annotated[int, Field(ge=1, le=6, strict=True)]
+from .education import Grade
 
 
 class SessionRequest(BaseModel):
@@ -123,6 +124,8 @@ def create_app(settings: Settings | None = None, *, tutor_factory: Callable[[Set
             await run_in_threadpool(storage.sweep_orphans, database, utc_now())
             app.state.mistake_settings = config
             app.state.mistake_service = MistakeService(database, storage, config, factory)
+            from .learning.service import LearningService
+            app.state.learning_service = LearningService(database)
             if config.enable_local_identity:
                 logger.bind(event="identity.local_mode").warning("Local test identity enabled; production authentication is required for deployment")
             logger.bind(event="service.start", model=config.model, max_sessions=config.service_max_sessions).info("Math Tutor API started")
@@ -137,10 +140,17 @@ def create_app(settings: Settings | None = None, *, tutor_factory: Callable[[Set
     app = FastAPI(title="Math Tutor API", version="0.1.0", lifespan=lifespan)
     from .mistakes.router import router as mistake_router
     from .mistakes.review_router import router as review_router
+    from .learning.router import router as learning_router
+    app.include_router(learning_router)
     app.include_router(review_router)
     app.include_router(mistake_router)
     app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
+
+    @app.exception_handler(sqlite3.OperationalError)
+    async def database_unavailable(request, exc):
+        logger.bind(event='database.unavailable').error('Database operation unavailable')
+        return JSONResponse(status_code=503,content={'detail':'数据服务暂时不可用，请稍后重试。'},headers={'Retry-After':'60'})
 
     @app.exception_handler(TutorError)
     async def model_error(request, exc):
@@ -210,7 +220,7 @@ def create_app(settings: Settings | None = None, *, tutor_factory: Callable[[Set
     async def analyze_upload(
         image: Annotated[UploadFile, File()],
         text: Annotated[str, Form(max_length=20_000)] = "",
-        grade: Annotated[int | None, Form(ge=1, le=6)] = None,
+        grade: Annotated[int | None, Form(ge=1, le=12)] = None,
     ):
         data_url = await upload_data(image)
         return await run_in_threadpool(analyze, text, data_url, grade)

@@ -1,0 +1,41 @@
+@base = http://127.0.0.1:8000
+# 先在 .env 启用本地学生身份并重启 API；从实际响应复制三个 UUID。
+@mistake_id = REPLACE_MISTAKE_UUID
+@item_id = REPLACE_DAILY_ITEM_UUID
+@practice_id = REPLACE_PRACTICE_UUID
+
+### 完整替换学习偏好，grade 1–12 可选
+PUT {{base}}/v1/learning/preferences
+Content-Type: application/json
+
+{"grade":8,"timezone":"Asia/Shanghai","daily_enabled":true,"generation_time":"19:00","daily_limit":5}
+
+### 主动生成（同日幂等）
+POST {{base}}/v1/learning/daily-tasks
+
+### 查看今天任务
+GET {{base}}/v1/learning/daily-tasks/today
+
+### 关联任务项创建练习
+POST {{base}}/v1/mistakes/{{mistake_id}}/practice-sessions
+Content-Type: application/json
+
+{"daily_task_item_id":"{{item_id}}"}
+
+### 提交实际作答（新作答使用新幂等键；重试保留原键）
+POST {{base}}/v1/mistakes/{{mistake_id}}/attempts
+Idempotency-Key: daily-attempt-001
+Content-Type: multipart/form-data; boundary=LearningBoundary
+
+--LearningBoundary
+Content-Disposition: form-data; name="text"
+
+4
+--LearningBoundary
+Content-Disposition: form-data; name="practice_id"
+
+{{practice_id}}
+--LearningBoundary--
+
+### 查看知识点表现（未确认目录映射时 items 可为空）
+GET {{base}}/v1/learning/abilities

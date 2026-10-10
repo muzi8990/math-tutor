@@ -50,7 +50,7 @@ def test_session_history_reset_and_delete(service, picture):
     assert http.post(f'/v1/sessions/{first}/messages', json={'text': '继续'}).status_code == 404
 
 
-@pytest.mark.parametrize('body', [{}, {'text': ' '}, {'text': '题目', 'grade': 7}, {'text': '题目', 'image': '/etc/passwd'}])
+@pytest.mark.parametrize('body', [{}, {'text': ' '}, {'text': '题目', 'grade': 13}, {'text': '题目', 'image': '/etc/passwd'}])
 def test_bad_analysis_input_never_calls_model(service, body):
     http, requests, _ = service
     assert http.post('/v1/analyze', json=body).status_code == 422

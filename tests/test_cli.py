@@ -31,3 +31,10 @@ def test_cli_bad_input_exits_before_model_call():
     with pytest.raises(SystemExit) as exc:
         cli.main([])
     assert exc.value.code == 2
+
+
+def test_cli_accepts_secondary_grade(backend, monkeypatch, capsys):
+    client, requests, _ = backend
+    monkeypatch.setattr(cli, 'MathTutor', lambda **kw: MathTutor(client=client, **kw))
+    assert cli.main(['解方程', '--grade', '9', '--env-file', '/nonexistent/test.env']) == 0
+    assert '初中三年级' in requests[0]['systemInstruction']['parts'][0]['text']

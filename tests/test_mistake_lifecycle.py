@@ -92,7 +92,7 @@ def test_concurrent_migrations_are_safe(tmp_path):
         futures=[pool.submit(Database(path).migrate) for _ in range(4)]
         for future in futures: future.result()
     with Database(path).connect() as conn:
-        assert conn.execute('SELECT count(*) FROM schema_migrations').fetchone()[0]==4
+        assert conn.execute('SELECT count(*) FROM schema_migrations').fetchone()[0]==5
 
 
 def test_catalog_mapping_and_filter(ready):

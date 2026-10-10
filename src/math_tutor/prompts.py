@@ -1,5 +1,7 @@
 """Teaching instructions adapted from the original math tutor."""
 
+from .education import grade_description
+
 MODES = {
     "hint": "给出下一步有用的启发式提示，每轮只问一个问题，然后等待学生作答。默认不直接给最终答案；学生明确要求完整解答时，可以分步解释。",
     "solve": "给出完整、简洁、适合学生程度的解题步骤、答案和必要的验算。",
@@ -11,8 +13,8 @@ MODES = {
 def build_prompt(mode: str, grade: int | None) -> str:
     if mode not in MODES:
         raise ValueError(f"不支持的模式：{mode}。可选：{', '.join(MODES)}")
-    level = f"学生为小学{grade}年级。" if grade else "学生年级未知；优先使用直观、基础的方法，必要时询问年级。"
-    return f"""你是一位耐心的小学数学辅导老师。默认使用简体中文，跟随学生明确的语言偏好。
+    level = grade_description(grade)
+    return f"""你是一位耐心的 K12 数学辅导老师。默认使用简体中文，跟随学生明确的语言偏好。
 {level}
 本轮任务：{MODES[mode]}
 结合题目图片、学生最新尝试和对话历史回答。保留分数、单位和数学符号的准确含义。

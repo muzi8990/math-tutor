@@ -7,6 +7,7 @@
 - **结构化题目分析**：核心与细分知识点、解题步骤、步骤关联知识点；Pydantic 校验引用关系和结果状态。
 - **解答质量检查**：本地精确数值核验、风险模型复核、最多一次修复；无法确认时返回待确认结果。
 - **多轮辅导**：按可选年级组织提示、检查学生步骤，限制会话容量与对话轮数。
+- **每日学习**：知识点表现、持久每日任务、主动生成和按学生时区定时生成。
 - **错题闭环**：图片与分析版本、重复提醒、练习提示记录、作答诊断、复习日程与统计。
 - **可靠后台任务**：SQLite 持久化队列、租约续期、版本检查、有限重试及文件清理。
 - **工程基础**：pydantic-settings 配置、Loguru 请求关联与脱敏、可注入模型客户端、离线回归测试。
@@ -46,7 +47,7 @@ cp .env.example .env
 python -m uvicorn math_tutor.api:app --host 127.0.0.1 --port 8000
 ```
 
-打开 [Swagger](http://127.0.0.1:8000/docs)。上传图片可直接调用 `POST /v1/analyze/image`，`grade` 可选，范围为 1–6。
+打开 [Swagger](http://127.0.0.1:8000/docs)。上传图片可直接调用 `POST /v1/analyze/image`，`grade` 可选，范围为 1–12。
 
 ```bash
 curl --fail-with-body http://127.0.0.1:8000/v1/analyze \
@@ -60,7 +61,7 @@ curl --fail-with-body http://127.0.0.1:8000/v1/analyze/image \
 
 返回结果包含 `status`、`problem_text`、`core_knowledge_points`、`detailed_knowledge_points`、`steps`、`answer` 和 `clarifications`。`status=needs_clarification` 时应提示用户核对条件，不展示答案。完整调用流程见 [接口文档](docs/API_GUIDE.md)，可直接使用 [HTTP 示例](examples/analyze.http)。
 
-### 体验错题管理
+### 体验错题与每日复习
 
 在 `.env` 启用仅用于回环地址调试的身份：
 
@@ -77,9 +78,27 @@ python -m math_tutor.mistakes.cli
 
 按 [错题调用流程](docs/API_GUIDE.md) 上传图片、查询分析结果、创建练习、提交作答和查看复习安排。未运行 worker 时分析保留在 `pending`。本地身份默认关闭，错题接口默认返回 401。
 
+另外启动每日任务调度进程：
+
+```bash
+python -m math_tutor.learning.cli scheduler
+```
+
+开启自动生成（需要上述本地身份配置）：
+
+```bash
+curl -X PUT http://127.0.0.1:8000/v1/learning/preferences \
+  -H 'Content-Type: application/json' \
+  -d '{"grade":8,"timezone":"Asia/Shanghai","daily_enabled":true,"generation_time":"19:00","daily_limit":5}'
+curl -X POST http://127.0.0.1:8000/v1/learning/daily-tasks
+curl http://127.0.0.1:8000/v1/learning/daily-tasks/today
+```
+
+同一天重复生成复用原任务，生成与查询不调用模型。每日任务默认最多 5 道，以到期题目优先；自动生成默认关闭，只生成任务，不发送外部通知。知识点表现需先确认全局目录映射，未映射错题仍可复习。完整流程见 [每日学习说明](docs/API_GUIDE.md#每日学习与能力评估) 和 [HTTP 示例](examples/daily-learning.http)。
+
 ## 案例展示
 
-[图片题目 → 知识点 → 10 步解答](docs/cases/rational-equation.md)：含原题截图、生成的 JSON、独立数学核对和输出改进点评。此例为初中扩展题，不代表已完成初中场景评测。
+[图片题目 → 知识点 → 10 步解答](docs/cases/rational-equation.md)：含原题截图、生成的 JSON、独立数学核对和输出改进点评。此例为初中数学题，不代表已完成初中场景评测。
 
 ## 开发与验证
 
@@ -88,9 +107,9 @@ python -m pytest -q
 python -m compileall -q src
 ```
 
-整理时在 Python 3.12 下验证 **142 项离线测试通过**。测试覆盖真实 Google SDK 配合模拟 HTTP 响应、FastAPI 请求、配置校验、图片处理、结构化输出、质量检查、任务恢复、幂等提交、数据隔离及复习事务。无需真实 API Key，不会调用 Gemini；这不代表真实题目正确率。CI 对 Python 3.11 / 3.12 执行安装、测试与构建，首次推送后的运行状态以 GitHub Actions 为准。
+整理时在 Python 3.12 下验证 **210 项离线测试通过**。测试覆盖真实 Google SDK 配合模拟 HTTP 响应、FastAPI 请求、配置校验、图片处理、结构化输出、质量检查、任务恢复、幂等提交、数据隔离及复习事务。无需真实 API Key，不会调用 Gemini；这不代表真实题目正确率。CI 对 Python 3.11 / 3.12 执行安装、测试与构建，CI 运行状态以 GitHub Actions 为准。
 
-更多开发约定见 [CONTRIBUTING](CONTRIBUTING.md)，评测边界见 [验证说明](docs/VALIDATION.md)。
+开发环境、测试与发布约定见 [CONTRIBUTING](CONTRIBUTING.md)。真实模型准确率、教学效果和并发性能尚需单独测量。
 
 ## 目录
 
@@ -103,9 +122,11 @@ src/math_tutor/
   settings.py         # 配置校验
   images.py           # 图片规范化与限制
   logging.py          # 请求日志与脱敏
+  education.py        # K12 年级与学段表述
+  learning/           # 证据评估、每日任务、目录维护与 scheduler
   mistakes/           # 错题业务、存储、独立 worker 与 SQL 迁移
 tests/               # 离线回归测试
-docs/                # 架构、API、配置及验证说明
+docs/                # 架构、API、配置、项目讲解与案例
 examples/            # HTTP 调用示例
 ```
 
@@ -113,6 +134,6 @@ examples/            # HTTP 调用示例
 
 这是可运行的后端原型，没有配套学生前端。普通会话在重启后丢失；建议单个 Uvicorn worker。错题采用 SQLite 与本地存储，尚未完成多实例部署。
 
-项目未提供完整账号认证、限流或计费；独立分析和普通会话接口当前不要求身份，公开部署前需统一保护。知识点编号仅在单次分析中有效，尚未实现正式题库、教材映射、知识图谱或自适应推荐。模型复核无法保证数学正确性，尚无真实题集准确率、教学效果或并发压测结果。
+项目未提供完整账号认证、限流或计费；独立分析和普通会话接口当前不要求身份，公开部署前需统一保护。模型知识点编号仅在单次分析中有效，现有维护命令可确认到全局目录的映射；尚未提供正式题库、完整教材目录、知识图谱或学习算法训练。模型复核无法保证数学正确性，尚无真实题集准确率、教学效果或并发压测结果。
 
 [完整使用与配置说明](docs/USAGE.md) · [架构说明](docs/ARCHITECTURE.md) · [项目设计与实现](docs/PROJECT_DESIGN.md)

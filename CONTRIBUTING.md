@@ -33,18 +33,19 @@ python -m hatchling build -t wheel
 
 在项目根目录执行。确认 `.env`、数据、日志及本地缓存未进入暂存区。提交说明应描述具体问题、最终行为及验证结果。项目当前没有统一格式化工具，修改时保持所在模块的风格，避免无关批量改写。
 
-## Git 发布
+## 文档与 Git 发布
 
-发布目录已初始化本地 Git，尚未提交或配置远端。创建自己的空 GitHub 仓库后执行：
+对外保留 README、API 指南、使用说明、架构、项目讲解和题目案例。设计草稿、实施计划、代码审查记录及本地验证报告仅在本地保存，相关路径已加入 `.gitignore`。业务中的复习逻辑、教师更正审计以及可复现测试仍属于产品代码和使用说明。
+
+`.gitignore` 不会删除已经提交的历史文件。准备发布时，除检查当前文件列表，也需检查将要推送的提交历史；内部文档出现在未推送的历史中时，保留原开发分支，从已发布基线制作不包含内部文档的发布提交，不通过强制推送改写已有公共历史。
+
+本次功能已准备 `release/daily-learning` 发布分支，使用已发布的 `origin/main` 为父提交，包含最终代码和公开文档，不包含新的内部设计、实施计划或审查报告。推送前先同步远端并确认没有新的冲突；仅在明确决定发布后执行推送。
 
 ```bash
-git status --short
-git add .
-git diff --cached --stat
-git commit -m "Initial math tutor backend portfolio"
-git branch -M main
-git remote add origin <YOUR_REPOSITORY_URL>
-git push -u origin main
+git fetch origin
+git log --oneline origin/main..release/daily-learning
+git diff --stat origin/main..release/daily-learning
+git ls-tree -r --name-only release/daily-learning
 ```
 
-将占位符替换为自己的仓库地址，仓库名和作者信息由你决定。推送后查看 Actions 是否通过，再将真实仓库链接添加到简历。
+不要直接推送仍带有内部工作记录的开发分支。测试使用真实 Google SDK 配合模拟 HTTP 响应及临时 SQLite 数据库，不调用真实 Gemini；三个学段的实际教学质量、人工目录的学术完整性和生产负载仍需单独评估。

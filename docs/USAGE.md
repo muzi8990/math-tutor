@@ -2,7 +2,7 @@
 
 本项目使用 Gemini 直接读取题目图片并返回文字。
 
-支持图片识题、文字问答、学生步骤检查、完整解答、启发式提示，以及内存中的多轮对话。默认使用简体中文，可指定小学年级。
+支持图片识题、文字问答、学生步骤检查、完整解答、启发式提示，以及内存中的多轮对话。默认使用简体中文，可指定小学、初中或高中年级。
 
 支持 `analyze_problem()` 返回 Pydantic 类型 `ProblemAnalysis`：核心知识点、细分知识点、逐步解答、每步涉及的知识点及应用说明。
 
@@ -11,7 +11,7 @@
 需要 Python 3.11 或以上；本项目在 Python 3.12 下完成离线测试。
 
 ```bash
-cd math-tutor-python
+cd math-tutor
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
@@ -28,7 +28,7 @@ CLI 通过 `--env-file` 指定文件；Python 使用 `Settings(_env_file="custom
 | --- | --- | --- |
 | `api_key` | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | 无默认值，实际调用前必需，`SecretStr` 隐藏显示 |
 | `model` | `GEMINI_MODEL` | `gemini-2.5-flash`，非空 |
-| `grade` | `TUTOR_GRADE` | 未指定，指定时为 1–6 |
+| `grade` | `TUTOR_GRADE` | 未指定，指定时为 1–12 |
 | `max_turns` | `TUTOR_MAX_TURNS` | 30，正整数 |
 | `timeout_ms` | `TUTOR_TIMEOUT_MS` | 60000，正整数，毫秒 |
 | `temperature` | `TUTOR_TEMPERATURE` | 0.1，范围 0–2 |
@@ -361,3 +361,35 @@ TUTOR_QUALITY_MAX_REPAIRS=1
 最多发生四次应用层模型调用（首次分析、复核、一次修复、再次复核），SDK 内部网络重试不计入此上限，因此复杂题目会增加成本与延迟。模型复核不是数学正确性的证明；本地检查也无法覆盖全部公式或知识点。Loguru 记录检查状态、问题代码、核验数量和修复次数，不记录原始题目、完整解答或图片。
 
 修改配置或更新代码后，需重启 API 和错题 worker。已有错题分析不会自动重新检查，可调用 `POST /v1/mistakes/{mistake_id}/analyze` 重新分析。分析快照记录提示词及质量策略版本，便于追踪。
+
+
+## 每日学习服务
+
+HTTP 服务、分析 worker 和每日任务 scheduler 是三个独立进程。在相同工作目录使用同一 `.env` 和 SQLite 数据库：
+
+```bash
+# 终端一：API
+python -m uvicorn math_tutor.api:app --host 127.0.0.1 --port 8000
+# 终端二：图片题分析与图片清理，需要模型权限
+python -m math_tutor.mistakes.cli
+# 终端三：每 60 秒检查定时任务，无需模型 Key
+python -m math_tutor.learning.cli scheduler
+```
+
+也可使用安装后的 `math-tutor-worker` 与 `math-tutor-learning scheduler`。学习接口沿用错题学生身份依赖；本地身份需在 `.env` 显式开启，生产需要真实认证。
+
+通过 `PUT /v1/learning/preferences` 保存学生当前年级、时区、生成时间和题量，开启 `daily_enabled` 后定时生效。PUT 是完整替换，省略字段恢复默认值（时区采用认证上下文）；未知年级可为 null。默认关闭、19:00、5 道，允许 1–10 道。首次开启时若当天已过生成时间，下次扫描即生成今天任务；重启不补建历史日期任务。
+
+`POST /v1/learning/daily-tasks` 主动生成；同一天已有任务时返回原任务。GET 只查询，不调用模型、不自动创建。学生修改时区不改已有任务快照，今天的查询日期依据当前时区；历史任务可按 ID 查看。
+
+知识点目录由团队审核维护，仅支持核心节点和直接下属细分节点两级；不能创建三级目录或将含子节点的核心重挂。模型局部 ID 不直接用于跨题能力评估。下列命令只由受信任服务端操作员使用，不对学生开放；UUID 为示例，应自行创建稳定目录 ID，题目与分析 ID 取实际记录：
+
+```bash
+math-tutor-learning catalog-put --id 22222222-2222-4222-8222-222222222222 --name '分式方程' --min-grade 7 --max-grade 9
+math-tutor-learning catalog-put --id 33333333-3333-4333-8333-333333333333 --name '分式方程定义域' --parent-id 22222222-2222-4222-8222-222222222222 --min-grade 7 --max-grade 9
+math-tutor-learning catalog-map --student-id 11111111-1111-4111-8111-111111111111 --mistake-id MISTAKE_ID --analysis-id ANALYSIS_ID --local-id DK1 --point-id 33333333-3333-4333-8333-333333333333
+```
+
+自定义配置文件放在子命令前，例如 `math-tutor-learning --env-file custom.env scheduler`。重新分析后的局部 ID 需要重新审核映射，历史答题仍绑定原 analysis_id。同名但要求不同的学段节点使用不同稳定 ID，不共享掌握结论。
+
+调度日志包括 `learning.scheduler_start`、`learning.scheduler_scan`、`learning.schedule_failed` 和停止日志；失败学生下次扫描重试，其他学生继续生成。日志不包含题目、图片、作答或模型 Key。规则评估反映近期答题证据，不是标准化能力测评。

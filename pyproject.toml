@@ -15,6 +15,7 @@ dev = ["pytest>=8,<10"]
 [project.scripts]
 math-tutor = "math_tutor.cli:main"
 math-tutor-worker = "math_tutor.mistakes.cli:main"
+math-tutor-learning = "math_tutor.learning.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/math_tutor"]

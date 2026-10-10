@@ -33,3 +33,11 @@ work/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local design, implementation and review records
+.superpowers/
+docs/superpowers/
+docs/reviews/
+docs/VALIDATION.md
+docs/*REVIEW*.md
+docs/*AUDIT*.md

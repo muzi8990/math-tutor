@@ -24,6 +24,9 @@ class Database:
     def migrate(self):
         files = sorted((Path(__file__).parent / 'migrations').glob('*.sql'))
         with self.connect() as conn:
+            # Parent-table rebuild must not cascade child records. Only this
+            # migration connection disables enforcement, before beginning.
+            conn.execute('PRAGMA foreign_keys=OFF')
             conn.execute('BEGIN IMMEDIATE')
             conn.execute('CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY)')
             versions = {row[0] for row in conn.execute('SELECT version FROM schema_migrations')}
@@ -44,3 +47,6 @@ class Database:
                     if statement.strip():
                         raise RuntimeError('迁移 SQL 不完整。')
                     conn.execute('INSERT INTO schema_migrations(version) VALUES(?)', (version,))
+
+            if conn.execute('PRAGMA foreign_key_check').fetchone() is not None:
+                raise RuntimeError('数据库迁移外键检查失败。')

@@ -7,7 +7,7 @@ from starlette.concurrency import run_in_threadpool
 from ..images import MAX_IMAGE_BYTES, MIME_TYPES
 from .identity import get_student
 from .models import StudentContext
-from .schemas import AnalysisStatus, LearningStatus
+from .schemas import PracticeRequest, AnalysisStatus, LearningStatus
 
 router = APIRouter(prefix='/v1/mistakes', tags=['错题管理'])
 Student = Annotated[StudentContext, Depends(get_student)]
@@ -37,7 +37,7 @@ async def validate_form(request, allowed):
 
 
 @router.post('',status_code=201)
-async def create(request: Request, student: Student, image: Annotated[UploadFile,File()], text: Annotated[str,Form(max_length=20_000)]='', grade: Annotated[int|None,Form(ge=1,le=6)]=None, note: Annotated[str,Form(max_length=2000)]='', allow_duplicate: Annotated[bool,Form()]=False):
+async def create(request: Request, student: Student, image: Annotated[UploadFile,File()], text: Annotated[str,Form(max_length=20_000)]='', grade: Annotated[int|None,Form(ge=1,le=12)]=None, note: Annotated[str,Form(max_length=2000)]='', allow_duplicate: Annotated[bool,Form()]=False):
     await validate_form(request, {'image','text','grade','note','allow_duplicate'})
     raw,mime = await read_upload(image)
     return await run_in_threadpool(get_service(request).create,student,raw,mime,text,grade,note,allow_duplicate)
@@ -68,7 +68,7 @@ def analyze(request: Request,student: Student,mistake_id: UUID):
     return get_service(request).enqueue_analysis(student,mistake_id)
 
 
-from .schemas import MistakePatch
+from .schemas import PracticeRequest, MistakePatch
 
 
 @router.patch('/{mistake_id}')
@@ -87,8 +87,8 @@ from fastapi.responses import JSONResponse
 
 
 @router.post('/{mistake_id}/practice-sessions',status_code=201)
-def practice(request: Request,student: Student,mistake_id: UUID):
-    return get_service(request).create_practice(student,mistake_id)
+def practice(request: Request,student: Student,mistake_id: UUID,body: PracticeRequest|None=None):
+    return get_service(request).create_practice(student,mistake_id,body.daily_task_item_id if body else None)
 
 
 @router.post('/{mistake_id}/practice-sessions/{practice_id}/hints')

@@ -14,7 +14,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("text", nargs="?", default="", help="题目或问题")
     parser.add_argument("--image", type=Path, help="本地 PNG/JPEG/WebP 图片")
     parser.add_argument("--mode", choices=MODES, default="hint", help="hint 提示 / solve 解答 / check 检查 / read 识题")
-    parser.add_argument("--grade", type=int, choices=range(1, 7), help="小学年级")
+    parser.add_argument("--grade", type=int, choices=range(1, 13), help="年级：1–6 小学，7–9 初中，10–12 高中（可选）")
     parser.add_argument("--model", help="Gemini 模型名称；默认读取 GEMINI_MODEL")
     parser.add_argument("--chat", action="store_true", help="开启多轮对话")
     parser.add_argument("--analyze", action="store_true", help="输出知识点及关联解题步骤的 JSON")

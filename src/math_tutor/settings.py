@@ -23,7 +23,7 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("GOOGLE_API_KEY", "GEMINI_API_KEY"),
     )
     model: str = Field(default="gemini-2.5-flash", validation_alias="GEMINI_MODEL", min_length=1)
-    grade: int | None = Field(default=None, ge=1, le=6, validation_alias="TUTOR_GRADE")
+    grade: int | None = Field(default=None, ge=1, le=12, validation_alias="TUTOR_GRADE")
     max_turns: int = Field(default=30, ge=1, validation_alias="TUTOR_MAX_TURNS")
     timeout_ms: int = Field(default=60_000, ge=1, validation_alias="TUTOR_TIMEOUT_MS")
     temperature: float = Field(default=0.1, ge=0, le=2, validation_alias="TUTOR_TEMPERATURE")

@@ -9,6 +9,8 @@ class MistakeService:
         self.database, self.storage, self.settings = database, storage, settings
         self.repository = Repository(database)
         self.tutor_factory = tutor_factory
+        from ..learning.repository import LearningRepository
+        self.learning = LearningRepository(database)
         from .models import utc_now
         self.clock = utc_now
 
@@ -50,6 +52,7 @@ class MistakeService:
     def enqueue_analysis(self, student, mistake_id):
         with self.database.connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            self.learning.invalidate_mistake(conn,student,mistake_id)
             return self.repository.enqueue(conn,self.repository.get(conn,student,mistake_id))
 
     def update(self, student, mistake_id, patch):
@@ -66,6 +69,7 @@ class MistakeService:
             if 'text' in changes and changes['text']!=old['problem_text']:
                 conn.execute("UPDATE mistakes SET content_version=content_version+1,analysis_status='pending',learning_status='new' WHERE id=?", (old['id'],))
                 conn.execute("UPDATE analysis_jobs SET status='cancelled',lease_token=NULL WHERE mistake_id=? AND status IN ('pending','processing')", (old['id'],))
+                self.learning.invalidate_mistake(conn,student,mistake_id)
                 conn.execute('DELETE FROM review_schedules WHERE mistake_id=?', (old['id'],))
                 self.repository.enqueue(conn,self.repository.get(conn,student,mistake_id))
             return self.repository.detail(conn,student,mistake_id)
@@ -75,9 +79,10 @@ class MistakeService:
             conn.execute('BEGIN IMMEDIATE')
             record=self.repository.get(conn,student,mistake_id)
             conn.execute('INSERT OR IGNORE INTO cleanup_jobs(storage_key,created_at) SELECT storage_key,? FROM assets WHERE mistake_id=? AND student_id=?', (timestamp(),record['id'],str(student.student_id)))
+            self.learning.invalidate_mistake(conn,student,mistake_id)
             conn.execute('DELETE FROM mistakes WHERE id=? AND student_id=?', (record['id'],str(student.student_id)))
 
-    def create_practice(self, student, mistake_id):
+    def create_practice(self, student, mistake_id, daily_task_item_id=None):
         with self.database.connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
             mistake=self.repository.get(conn,student,mistake_id)
@@ -85,6 +90,8 @@ class MistakeService:
                 raise HTTPException(409,'请先完成题目分析与确认。')
             practice_id=new_id()
             conn.execute('INSERT INTO practice_sessions(id,mistake_id,content_version,created_at) VALUES(?,?,?,?)',(practice_id,mistake['id'],mistake['content_version'],timestamp()))
+            if daily_task_item_id:
+                self.learning.bind_practice(conn,student,mistake,daily_task_item_id,practice_id)
             return {'id':practice_id,'mistake_id':mistake['id'],'content_version':mistake['content_version'],'hint_count':0}
 
     def request_hint(self, student, mistake_id, practice_id):
@@ -95,6 +102,7 @@ class MistakeService:
             practice=conn.execute('SELECT * FROM practice_sessions WHERE id=? AND mistake_id=? AND content_version=?',(str(practice_id),mistake['id'],mistake['content_version'])).fetchone()
             if not practice:
                 raise HTTPException(404,'练习不存在。')
+            self.learning.validate_practice(conn,student,practice)
             if practice['consumed']:
                 raise HTTPException(409,'练习已提交作答。')
             if practice['hint_count']>=10:
@@ -102,6 +110,7 @@ class MistakeService:
             analysis=conn.execute('SELECT payload FROM analyses WHERE mistake_id=? AND content_version=? ORDER BY created_at DESC LIMIT 1',(mistake['id'],mistake['content_version'])).fetchone()
             if mistake['analysis_status']!='ready' or not analysis:
                 raise HTTPException(409,'请先完成题目分析。')
+            teaching_grade=mistake['grade'] if mistake['grade'] is not None else self.learning.get_preferences(conn,student).grade
             count=practice['hint_count']+1
             conn.execute('UPDATE practice_sessions SET hint_count=? WHERE id=?',(count,str(practice_id)))
         payload=json.loads(analysis['payload'])
@@ -110,7 +119,7 @@ class MistakeService:
             hint=provider(payload,count)
         else:
             from ..settings import Settings
-            values={**self.settings.model_dump(),'grade':mistake['grade']}
+            values={**self.settings.model_dump(),'grade':teaching_grade}
             with self.tutor_factory(Settings.model_validate(values)) as tutor:
                 hint=tutor.chat('题目：'+payload['problem_text']+f'\n这是第{count}次提示，请给一个小提示帮助学生下一步思考。',mode='hint')
         return {'hint':hint,'hint_count':count,'practice_id':str(practice_id)}
@@ -138,6 +147,7 @@ class MistakeService:
             analysis=conn.execute('SELECT * FROM analyses WHERE mistake_id=? AND content_version=? ORDER BY created_at DESC LIMIT 1',(mistake['id'],mistake['content_version'])).fetchone()
             if not analysis:
                 raise HTTPException(409,'分析记录不可用。')
+            teaching_grade=mistake['grade'] if mistake['grade'] is not None else self.learning.get_preferences(conn,student).grade
             digest=hashlib.sha256(json.dumps([mistake['content_version'],text,hashlib.sha256(image).hexdigest() if image else None,mime,str(practice_id) if practice_id else None],ensure_ascii=False).encode()).hexdigest()
             prior=conn.execute('SELECT * FROM attempt_submissions WHERE mistake_id=? AND idempotency_key=?',(mistake['id'],idempotency_key)).fetchone()
             if prior:
@@ -152,6 +162,7 @@ class MistakeService:
                 practice=conn.execute('SELECT * FROM practice_sessions WHERE id=? AND mistake_id=? AND content_version=?',(str(practice_id),mistake['id'],mistake['content_version'])).fetchone()
                 if not practice:
                     raise HTTPException(404,'练习不存在。')
+                self.learning.validate_practice(conn,student,practice)
                 same_submission=prior and prior['practice_id']==str(practice_id)
                 if practice['consumed'] and not same_submission:
                     raise HTTPException(409,'这次练习已经提交。')
@@ -176,7 +187,7 @@ class MistakeService:
         thread.start()
         stored=None
         try:
-            values={**self.settings.model_dump(),'grade':mistake['grade']}
+            values={**self.settings.model_dump(),'grade':teaching_grade}
             judge=getattr(self,'judge',None) or Judge(self.tutor_factory,Settings.model_validate(values))
             data_url=f'data:{mime};base64,'+base64.b64encode(image).decode() if image else None
             result=judge.judge(json.loads(analysis['payload']),text,data_url)
@@ -199,7 +210,9 @@ class MistakeService:
                 conn.execute('UPDATE attempts SET analysis_id=? WHERE id=?', (analysis['id'],attempt_id))
                 conn.execute("UPDATE attempt_submissions SET status='done',attempt_id=?,lease_token=NULL,lease_until=NULL WHERE id=?",(attempt_id,submission_id))
                 attempt=self.repository.attempt_dict(conn.execute('SELECT * FROM attempts WHERE id=?',(attempt_id,)).fetchone())
+                self.learning.validate_practice(conn,student,practice)
                 self.update_review(conn,current,attempt,student)
+                self.learning.apply_attempt(conn,student,practice_id,attempt)
                 return attempt,True
         except Exception:
             if stored:
@@ -219,7 +232,7 @@ class MistakeService:
         state=ReviewState(learning_status=mistake['learning_status'])
         if row:
             state=ReviewState(stage=row['stage'],next_review_at=datetime.fromisoformat(row['next_review_at']),last_review_at=datetime.fromisoformat(row['last_review_at']) if row['last_review_at'] else None,correct_dates=tuple(json.loads(row['correct_dates'])),due_passed=bool(row['due_passed']),learning_status=mistake['learning_status'])
-        decision=ReviewPolicy(self.settings.review_intervals).apply(state,attempt,self.clock(),student.timezone)
+        decision=ReviewPolicy(self.settings.review_intervals).apply(state,attempt,self.clock(),self.learning.get_preferences(conn,student).timezone)
         new=decision.state
         if new!=state and new.next_review_at:
             conn.execute('INSERT INTO review_schedules(mistake_id,stage,next_review_at,last_review_at,correct_dates,due_passed) VALUES(?,?,?,?,?,?) ON CONFLICT(mistake_id) DO UPDATE SET stage=excluded.stage,next_review_at=excluded.next_review_at,last_review_at=excluded.last_review_at,correct_dates=excluded.correct_dates,due_passed=excluded.due_passed',(mistake['id'],new.stage,timestamp(new.next_review_at),timestamp(new.last_review_at) if new.last_review_at else None,json.dumps(new.correct_dates),int(new.due_passed)))
@@ -256,9 +269,13 @@ class MistakeService:
                 state=ReviewState()
                 policy=ReviewPolicy(self.settings.review_intervals)
                 for row in conn.execute('SELECT * FROM attempts WHERE mistake_id=? AND content_version=? ORDER BY created_at,id',(mistake['id'],mistake['content_version'])):
-                    state=policy.apply(state,self.repository.attempt_dict(row),datetime.fromisoformat(row['created_at']),student.timezone).state
+                    state=policy.apply(state,self.repository.attempt_dict(row),datetime.fromisoformat(row['created_at']),self.learning.get_preferences(conn,student).timezone).state
                 conn.execute('DELETE FROM review_schedules WHERE mistake_id=?',(mistake['id'],))
                 if state.next_review_at:
                     conn.execute('INSERT INTO review_schedules(mistake_id,stage,next_review_at,last_review_at,correct_dates,due_passed) VALUES(?,?,?,?,?,?)',(mistake['id'],state.stage,timestamp(state.next_review_at),timestamp(state.last_review_at) if state.last_review_at else None,json.dumps(state.correct_dates),int(state.due_passed)))
                 conn.execute('UPDATE mistakes SET learning_status=?,updated_at=? WHERE id=?',(state.learning_status,timestamp(self.clock()),mistake['id']))
-            return self.repository.attempt_dict(conn.execute('SELECT * FROM attempts WHERE id=?',(str(attempt_id),)).fetchone())
+            corrected=self.repository.attempt_dict(conn.execute('SELECT * FROM attempts WHERE id=?',(str(attempt_id),)).fetchone())
+            submission=conn.execute('SELECT practice_id FROM attempt_submissions WHERE attempt_id=?',(str(attempt_id),)).fetchone()
+            if submission:
+                self.learning.apply_attempt(conn,student,submission['practice_id'],corrected)
+            return corrected

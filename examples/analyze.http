@@ -27,3 +27,9 @@ Content-Disposition: form-data; name="grade"
 
 3
 --MathTutorBoundary--
+
+### 初中题目：grade=8 表示初中二年级
+POST {{baseUrl}}/v1/analyze
+Content-Type: application/json
+
+{"text":"解方程：2/(x-1)=4，并检验分母。","grade":8}

@@ -89,13 +89,18 @@ class AnalysisWorker:
         try:
             with self.database.connect() as conn:
                 mistake = conn.execute('SELECT * FROM mistakes WHERE id=?', (job['mistake_id'],)).fetchone()
+                teaching_grade = mistake['grade'] if mistake and mistake['grade'] is not None else None
+                if mistake and teaching_grade is None:
+                    from uuid import UUID
+                    from .models import StudentContext
+                    teaching_grade = self.service.learning.get_preferences(conn,StudentContext(UUID(mistake['student_id']),self.settings.student_timezone)).grade
                 asset = conn.execute("SELECT * FROM assets WHERE mistake_id=? AND purpose='question'", (job['mistake_id'],)).fetchone()
             if mistake is None or asset is None:
                 return True
             raw = self.service.storage.read(asset['storage_key'])
             data_url = f"data:{asset['mime']};base64,"+base64.b64encode(raw).decode()
             values = self.settings.model_dump()
-            values['grade'] = mistake['grade']
+            values['grade'] = teaching_grade
             with logger.contextualize(mistake_id=job['mistake_id'],job_id=job['id']):
                 with self.tutor_factory(Settings.model_validate(values)) as tutor:
                     result = tutor.analyze_problem(mistake['problem_text'],image=data_url)
