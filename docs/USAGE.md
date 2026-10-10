@@ -219,22 +219,6 @@ with MathTutor(settings=Settings(grade=3)) as tutor:
 
 图片原始及标准化后大小上限均为 10 MiB，像素上限 1600 万，仅接受单帧图片。建议裁剪到相关题目和作答。后续每轮会重发保留的图片与历史，需要计入模型调用费用和上下文预算。
 
-## 迁移对应关系
-
-| 原 TypeScript 文件 | Python 处理 |
-| --- | --- |
-| `main.ts` | `cli.py` 和 `__main__.py`，普通 Python 入口 |
-| `agent.ts` | `agent.py`，Gemini 对话与会话管理 |
-| `canvas_vision.ts` | `analyze_image()` 与 `images.py`，直接读取图片 |
-| `canvas_solution.ts` | `chat(mode='solve')`，输出文字步骤 |
-| `tutor.ts` | `prompts.py`，中文教学规则与任务模式 |
-| `text_input.ts` | `chat()` 和 CLI 交互循环 |
-| `pipeline.ts` / `canvas_bridge.ts` / `canvas_protocol.ts` | 已移除 |
-
-原项目中依赖白板结构、目标 shape 和坐标的少数方程规则没有逐行移植；这一版统一由模型解题，不提供独立确定性验算器。这样避免把白板专用逻辑带入纯图片/文字接口。与原项目相比，看图和回答合并为一次模型请求；独立识题是可选操作。
-
-这是可嵌入的 Python 模块、CLI 和 FastAPI 服务，不包含数据库、用户鉴权或长期学情管理。提示模式依赖模型遵循指令，并非答案泄露的强制保证；模型数学正确性与教学效果仍需实题评测。
-
 ## 测试与构建
 
 ```bash
