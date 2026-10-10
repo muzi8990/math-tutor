@@ -1,0 +1,29 @@
+# 可使用支持 .http 的编辑器运行；先启动 API 并配置自己的 Gemini Key。
+@baseUrl = http://127.0.0.1:8000
+
+### 存活检查，不调用模型
+GET {{baseUrl}}/health
+
+### 文字分析；会调用模型，grade 可省略
+POST {{baseUrl}}/v1/analyze
+Content-Type: application/json
+
+{
+  "text": "24块饼干平均分给6人，每人几块？",
+  "grade": 3
+}
+
+### 图片分析：将 question.jpg 放在 examples 目录，或修改路径
+POST {{baseUrl}}/v1/analyze/image
+Content-Type: multipart/form-data; boundary=MathTutorBoundary
+
+--MathTutorBoundary
+Content-Disposition: form-data; name="image"; filename="question.jpg"
+Content-Type: image/jpeg
+
+< ./question.jpg
+--MathTutorBoundary
+Content-Disposition: form-data; name="grade"
+
+3
+--MathTutorBoundary--

@@ -1,0 +1,138 @@
+{
+  "status": "solved",
+  "problem_text": "若数 a 使关于 x 的分式方程 \\frac{2}{x-1} + \\frac{a}{1-x} = 4 的解为正数，且使关于 y 的不等式组 \\begin{cases} \\frac{y+2}{3} - \\frac{y}{2} > 1 \\\\ 2(y-a) \\leqslant 0 \\end{cases} 的解集为 y < -2，则符合条件的所有整数 a 的和为（ ）\nA. 10\nB. 12\nC. 14\nD. 16",
+  "core_knowledge_points": [
+    {
+      "id": "K1",
+      "name": "解含参分式方程",
+      "description": "含有未知数的分式方程，通过去分母化为整式方程求解，但必须注意分母不能为零（排除增根）。"
+    },
+    {
+      "id": "K2",
+      "name": "一元一次不等式组的解集与含参问题",
+      "description": "分别求出不等式组中各个不等式的解集，再利用数轴或大小关系结合已知公共解集确定参数的取值范围。"
+    }
+  ],
+  "detailed_knowledge_points": [
+    {
+      "id": "DK1",
+      "name": "分式方程的定义域与增根检验",
+      "description": "原方程中分母不能为 0，由分母非零确定未知数的禁值，求得的解必须排除该禁值。",
+      "parent_id": "K1"
+    },
+    {
+      "id": "DK2",
+      "name": "分母互为相反数的分式化简与解整式方程",
+      "description": "利用 \\frac{a}{1-x} = -\\frac{a}{x-1} 化为同分母分式，两边同乘最简公分母化为整式方程求出解的代数表达式。",
+      "parent_id": "K1"
+    },
+    {
+      "id": "DK3",
+      "name": "根据公共解集确定参数的不等关系",
+      "description": "根据不等式组的已知解集，分析含参不等式的边界值与确定边界值之间的大小关系，注意端点是否可取等号。",
+      "parent_id": "K2"
+    }
+  ],
+  "steps": [
+    {
+      "index": 1,
+      "description": "写出原分式方程有意义的条件：每个含未知数的分母均不能为 0，从而得到未知数 x 的禁值。",
+      "formula": "x - 1 \\neq 0 \\text{ 且 } 1 - x \\neq 0 \\implies x \\neq 1",
+      "knowledge_point_ids": [
+        "K1",
+        "DK1"
+      ],
+      "knowledge_application": "根据分式的意义，分母不能为 0，确定 x \\neq 1。"
+    },
+    {
+      "index": 2,
+      "description": "利用分母互为相反数的关系调整分式符号，将分母统一为 x - 1。",
+      "formula": "\\frac{2}{x-1} - \\frac{a}{x-1} = 4",
+      "knowledge_point_ids": [
+        "K1",
+        "DK2"
+      ],
+      "knowledge_application": "因为 1 - x = -(x - 1)，所以 \\frac{a}{1-x} = -\\frac{a}{x-1}。"
+    },
+    {
+      "index": 3,
+      "description": "在 x \\neq 1 的前提下，方程两边同时乘以最简公分母 (x - 1)，化为整式方程。",
+      "formula": "(x-1) \\cdot \\left(\\frac{2-a}{x-1}\\right) = 4(x-1) \\implies 2 - a = 4x - 4",
+      "knowledge_point_ids": [
+        "K1",
+        "DK2"
+      ],
+      "knowledge_application": "方程两边同乘非零公分母以去分母。"
+    },
+    {
+      "index": 4,
+      "description": "移项、合并同类项，并解出未知数 x 用含参数 a 的代数式表示。",
+      "formula": "4x = 6 - a \\implies x = \\frac{6 - a}{4}",
+      "knowledge_point_ids": [
+        "K1",
+        "DK2"
+      ],
+      "knowledge_application": "通过移项和两边同除以非零常数 4，解出整式方程的根。"
+    },
+    {
+      "index": 5,
+      "description": "根据题设条件“方程的解为正数”且“解不能为增根禁值 x = 1”，列出关于 a 的限制条件并求解。",
+      "formula": "\\begin{cases} \\frac{6-a}{4} > 0 \\\\ \\frac{6-a}{4} \\neq 1 \\end{cases} \\implies \\begin{cases} 6 - a > 0 \\\\ 6 - a \\neq 4 \\end{cases} \\implies a < 6 \\text{ 且 } a \\neq 2",
+      "knowledge_point_ids": [
+        "K1",
+        "DK1"
+      ],
+      "knowledge_application": "解为正数即 x > 0，且分母不为 0 即 x \\neq 1，由此确定 a 的第一组取值范围。"
+    },
+    {
+      "index": 6,
+      "description": "求解不等式组中的第一个不等式 \\frac{y+2}{3} - \\frac{y}{2} > 1：两边同乘正数 6 去分母并移项求解。",
+      "formula": "2(y+2) - 3y > 6 \\implies 2y + 4 - 3y > 6 \\implies -y > 2 \\implies y < -2",
+      "knowledge_point_ids": [
+        "K2"
+      ],
+      "knowledge_application": "利用去分母、展开、移项及两边同除以负数时不等号变向，求出一元一次不等式的解集。"
+    },
+    {
+      "index": 7,
+      "description": "求解不等式组中的第二个不等式 2(y - a) \\leqslant 0。",
+      "formula": "2(y-a) \\leqslant 0 \\implies y - a \\leqslant 0 \\implies y \\leqslant a",
+      "knowledge_point_ids": [
+        "K2"
+      ],
+      "knowledge_application": "两边同除以正数 2，移项得到关于 y 的解集。"
+    },
+    {
+      "index": 8,
+      "description": "由不等式组 \\begin{cases} y < -2 \\\\ y \\leqslant a \\end{cases} 的解集已知为 y < -2，分析参数 a 的取值范围。根据“同小取小”，要使得解集为 y < -2，必须有 -2 \\leqslant a。",
+      "formula": "a \\geqslant -2",
+      "knowledge_point_ids": [
+        "K2",
+        "DK3"
+      ],
+      "knowledge_application": "若 a < -2，则解集将变为 y \\leqslant a；若 a \\geqslant -2，则交集恒为 y < -2，包含端点 a = -2 的情况。"
+    },
+    {
+      "index": 9,
+      "description": "综合两部分对 a 的限制条件，得出 a 的综合取值范围，并列出符合条件的所有整数 a。",
+      "formula": "-2 \\leqslant a < 6 \\text{ 且 } a \\neq 2 \\implies a \\in \\{-2, -1, 0, 1, 3, 4, 5\\}",
+      "knowledge_point_ids": [
+        "K1",
+        "K2"
+      ],
+      "knowledge_application": "取两个范围的交集，并排除增根对应的 a = 2，枚举其中的所有整数解。"
+    },
+    {
+      "index": 10,
+      "description": "计算所有符合条件的整数 a 的和，并与选项匹配。",
+      "formula": "(-2) + (-1) + 0 + 1 + 3 + 4 + 5 = 10",
+      "knowledge_point_ids": [
+        "K1",
+        "K2"
+      ],
+      "knowledge_application": "对枚举出的所有整数求和，结果为 10，对应选项 A。"
+    }
+  ],
+  "answer": "A. 10",
+  "clarifications": []
+}

@@ -1,0 +1,35 @@
+# Secrets: only the template belongs in Git
+.env*
+!.env.example
+*.pem
+*.key
+
+# Environments and Python artifacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+
+# Runtime state and local working artifacts
+data/
+logs/
+*.log
+*.sqlite3
+*.sqlite3-*
+work/
+.uv-cache/
+
+# Editors and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
