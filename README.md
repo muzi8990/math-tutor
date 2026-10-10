@@ -119,6 +119,6 @@ examples/            # HTTP 调用示例
 
 ## 项目来源与许可证
 
-本项目从 [zicojiao/ai-math-tutor](https://github.com/zicojiao/ai-math-tutor) 的 `apps/agent` 思路改编，转为 Python 后端并扩展结构化分析、质量检查和错题管理。保留已有 [MIT 许可证](LICENSE) 及版权声明。项目开发使用了 AI 辅助；求职展示时应根据本人实际参与情况介绍贡献。
+本项目从 [zicojiao/ai-math-tutor](https://github.com/zicojiao/ai-math-tutor) 的 `apps/agent` 思路改编，转为 Python 后端并扩展结构化分析、质量检查和错题管理。
 
 [完整使用与配置说明](docs/USAGE.md) · [架构说明](docs/ARCHITECTURE.md) · [项目讲解提纲](docs/PORTFOLIO.md)
