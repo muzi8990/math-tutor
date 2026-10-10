@@ -115,8 +115,4 @@ examples/            # HTTP 调用示例
 
 项目未提供完整账号认证、限流或计费；独立分析和普通会话接口当前不要求身份，公开部署前需统一保护。知识点编号仅在单次分析中有效，尚未实现正式题库、教材映射、知识图谱或自适应推荐。模型复核无法保证数学正确性，尚无真实题集准确率、教学效果或并发压测结果。
 
-## 项目来源与许可证
-
-本项目从 [zicojiao/ai-math-tutor](https://github.com/zicojiao/ai-math-tutor) 的 `apps/agent` 思路改编，转为 Python 后端并扩展结构化分析、质量检查和错题管理。
-
 [完整使用与配置说明](docs/USAGE.md) · [架构说明](docs/ARCHITECTURE.md) · [项目讲解提纲](docs/PORTFOLIO.md)
