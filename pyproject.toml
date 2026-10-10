@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "math-tutor-python"
 version = "0.1.0"
-description = "Gemini image and text math tutor, without realtime audio or canvas dependencies"
+description = "Gemini multimodal math tutoring service with structured analysis and mistake review"
 requires-python = ">=3.11"
 dependencies = ["google-genai>=2.29,<3", "Pillow>=11,<13", "pydantic>=2.12,<3", "pydantic-settings>=2.15,<3", "httpx>=0.28,<1", "fastapi>=0.141,<1", "uvicorn>=0.52,<1", "python-multipart>=0.0.32,<1", "loguru>=0.6,<1"]
 
